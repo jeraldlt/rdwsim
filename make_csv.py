@@ -13,13 +13,12 @@ def path_rotation(path_df, head_body_sep, window_size):
     total_time = path_time(path_df, window_size)
 
     if head_body_sep:
-        rotation = path_df[['virtualHeading']].iloc[:-window_size].diff().abs().sum().item()
-        
-        return rotation, rotation / total_time
-
+        data = path_df[["virtualX", "virtualY", "deltaFrameTime"]].iloc[:-window_size]
+    else:
+        data = path_df[["virtualX", "virtualY", "deltaFrameTime"]].rolling(window_size, min_periods=1, center=True).mean()
 
     rotation = 0.0
-    data = path_df[["virtualX", "virtualY"]].rolling(window_size, min_periods=1, center=True).mean()
+    velocities = 0.0
 
     heading = 0.0
     last_row = None
@@ -34,17 +33,21 @@ def path_rotation(path_df, head_body_sep, window_size):
 
         new_heading = atan2(row['virtualY'] - last_row['virtualY'], row['virtualX'] - last_row['virtualX'])
 
-        rotation += abs(new_heading - heading) / pi * 180
+        delta_rotation = abs(new_heading - heading) / pi * 180
+        rotation += delta_rotation
+        velocities += delta_rotation / row['deltaFrameTime'].item()
+
         heading = new_heading
         last_row = row
 
-    return rotation, (rotation / total_time)
+    return rotation, (velocities / len(data))
 
 def path_translation(path_df):
     total_time = path_time(path_df, 1)
 
     translation = 0.0
-    data = path_df[["virtualX", "virtualY"]]
+    velocities = 0.0
+    data = path_df[["virtualX", "virtualY", "deltaFrameTime"]]
 
     last_row = None
     for i, row in data.iterrows():
@@ -55,11 +58,12 @@ def path_translation(path_df):
             last_row = row
             continue
 
-        translation += sqrt(pow(row['virtualY'] - last_row['virtualY'], 2) + pow(row['virtualX'] - last_row['virtualX'], 2))
-
+        delta_translation = sqrt(pow(row['virtualY'] - last_row['virtualY'], 2) + pow(row['virtualX'] - last_row['virtualX'], 2))
+        translation += delta_translation
+        velocities += delta_translation / row['deltaFrameTime'].item()
         last_row = row
 
-    return translation, (translation / total_time)
+    return translation, (velocities / len(data))
 
 
 def compute_environment(environment, window_size):
@@ -108,8 +112,8 @@ def compute_environment(environment, window_size):
         # Rotation gain with head-body separation
         path_data["rotation_mean_sep"] = (rotation_velocity_sep * total_time) / rotation_sep
         path_data["rotation_standard_sep"] = (rotation_standard * total_time) / rotation_sep
-        #
-        # # Rotation gain without head-body separation
+        
+        # Rotation gain without head-body separation
         path_data["rotation_mean_nosep"] = (rotation_velocity_nosep * total_time) / rotation_nosep
         path_data["rotation_standard_nosep"] = (rotation_standard * total_time) / rotation_nosep
 

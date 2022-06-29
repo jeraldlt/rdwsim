@@ -184,10 +184,11 @@ def compute_environment(environment, window_size):
             constant_availability += max(abs(rotation_standard * dt * (rotation_gain - 1.0)), abs(translation_standard * dt * curvature))
             mean_availability += max(abs(rotation_velocity_sep * dt * (rotation_gain - 1.0)), abs(translation_velocity * dt * curvature))
             dynamic_availability += max(abs(delta_rotation * (rotation_gain - 1.0)), abs(delta_translation * curvature))
-       
-        path_data["combined_standard_nosep"] = constant_availability
-        path_data["combined_mean_nosep"] = mean_availability
-        path_data["combined_dynamic_nosep"] = dynamic_availability
+        
+        if dynamic_availability > 0:
+            path_data["combined_standard_nosep"] = constant_availability / dynamic_availability
+            path_data["combined_mean_nosep"] = mean_availability / dynamic_availability
+            path_data["combined_dynamic_nosep"] = dynamic_availability
 
 
         csv.append(path_data)

@@ -3,47 +3,87 @@ import sys
 from math import *
 import pandas as pd
 
+def heading_difference(heading1, heading2):
+    if heading1 * heading2 > 0:
+        return abs(heading2 - heading1)
+
+    if heading1 < 0:
+        heading1 += 2 * pi
+    elif heading2 < 0:
+        heading2 += 2 * pi
+
+    return abs(heading2 - heading1)
+
+
 def path_time(path_df, window_size):
     """Calculates the total time taken for the user to complete the task"""
-    return path_df[['deltaFrameTime']].iloc[:-window_size].sum().item()
+    return path_df[['deltaFrameTime']].sum().item()
 
 def path_rotation(path_df, head_body_sep, window_size):
     """Calculates the total rotation in degrees and mean rotational velocity in degrees/sec for a path"""
 
-    total_time = path_time(path_df, window_size)
+    # total_time = path_time(path_df, window_size)
 
-    if head_body_sep:
-        data = path_df[["virtualX", "virtualY", "deltaFrameTime"]].iloc[:-window_size]
-    else:
-        data = path_df[["virtualX", "virtualY", "deltaFrameTime"]].rolling(window_size, min_periods=1, center=True).mean()
-
+    count = 0
     rotation = 0.0
     velocities = 0.0
 
-    heading = 0.0
-    last_row = None
-    for i, row in data.iterrows():
-        if i == 0:
+    if head_body_sep:
+        data = path_df[["virtualHeading", "deltaFrameTime"]]
+
+        last_row = None
+        for i, row in data.iterrows():
+            if i == 0:
+                last_row = row
+                continue
+            elif i == 1:
+                last_row = row
+                continue
+
+            delta_rotation = abs(row['virtualHeading'] - last_row['virtualHeading']).item()
+            
+            rotation += delta_rotation
+            velocities += delta_rotation / row['deltaFrameTime'].item()
             last_row = row
-            continue
-        elif i == 1:
-            heading = atan2(row['virtualY'] - last_row['virtualY'], row['virtualX'] - last_row['virtualX'])
+            count += 1
+
+
+    else:
+        data = path_df[["virtualX", "virtualY", "deltaFrameTime"]].rolling(window_size, min_periods=1, center=True).mean()
+
+        heading = 0.0
+        last_row = None
+
+        for i, row in data.iterrows():
+            if i == 0:
+                last_row = row
+                continue
+            elif i == 1:
+                heading = atan2(row['virtualY'] - last_row['virtualY'], row['virtualX'] - last_row['virtualX'])
+                last_row = row
+                continue
+
+            new_heading = atan2(row['virtualY'] - last_row['virtualY'], row['virtualX'] - last_row['virtualX'])
+
+            delta_rotation = degrees(heading_difference(heading, new_heading))
+            
+            if sqrt(pow(row['virtualY'] - last_row['virtualY'], 2) + pow(row['virtualX'] - last_row['virtualX'], 2)) < 1e-10:
+                # print(i, heading, new_heading, delta_rotation, row['virtualY'] - last_row['virtualY'], row['virtualX'] - last_row['virtualX'])
+                last_row = row
+                heading = new_heading
+                continue
+
+            rotation += delta_rotation
+            velocities += delta_rotation / row['deltaFrameTime'].item()
+
+            count += 1
+            heading = new_heading
             last_row = row
-            continue
 
-        new_heading = atan2(row['virtualY'] - last_row['virtualY'], row['virtualX'] - last_row['virtualX'])
-
-        delta_rotation = abs(new_heading - heading) / pi * 180
-        rotation += delta_rotation
-        velocities += delta_rotation / row['deltaFrameTime'].item()
-
-        heading = new_heading
-        last_row = row
-
-    return rotation, (velocities / len(data))
+    return rotation, (velocities / count)
 
 def path_translation(path_df):
-    total_time = path_time(path_df, 1)
+    # total_time = path_time(path_df, 1)
 
     translation = 0.0
     velocities = 0.0
@@ -87,6 +127,8 @@ def compute_environment(environment, window_size):
         rotation_nosep, rotation_velocity_nosep = path_rotation(path_df, False, window_size)
         rotation_standard = 90.0
 
+        # print(rotation_velocity_sep)
+
         translation, translation_velocity = path_translation(path_df)
         translation_standard = 1.0
 
@@ -117,7 +159,7 @@ def compute_environment(environment, window_size):
         path_data["rotation_mean_nosep"] = (rotation_velocity_nosep * total_time) / rotation_nosep
         path_data["rotation_standard_nosep"] = (rotation_standard * total_time) / rotation_nosep
 
-
+        # print(environment, rotation_standard, total_time, rotation_sep, path_data["rotation_standard_sep"])
         # Combined rotation and curvature gains
         constant_availability = 0.0
         mean_availability = 0.0

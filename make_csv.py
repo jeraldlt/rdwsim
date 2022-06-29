@@ -175,7 +175,6 @@ def compute_environment(environment, window_size):
                 continue
 
             rotation += abs(row['virtualHeading'] - last_row['virtualHeading'])
-            last_row = row
 
             dt = row['deltaFrameTime'].item()
             delta_rotation = abs(row['virtualHeading'] - last_row['virtualHeading']).item()
@@ -185,6 +184,8 @@ def compute_environment(environment, window_size):
             mean_availability += max(abs(rotation_velocity_sep * dt * (rotation_gain - 1.0)), abs(translation_velocity * dt * curvature))
             dynamic_availability += max(abs(delta_rotation * (rotation_gain - 1.0)), abs(delta_translation * curvature))
         
+            last_row = row
+       
         if dynamic_availability > 0:
             path_data["combined_standard_nosep"] = constant_availability / dynamic_availability
             path_data["combined_mean_nosep"] = mean_availability / dynamic_availability
